@@ -38,30 +38,49 @@ app.get("/saml/login", async function (req, res) {
   try {
     const email = req.query.email;
     if (!email) throw new Error("Email is required!");
-    const domain = email.split("@")[1];
-    if (!domain) throw new Error("Email with Domain is required!");
-    const tenant = await db.tenant.findUnique({
+    // const domain = email.split("@")[1];
+    // if (!domain) throw new Error("Email with Domain is required!");
+    const user = await db.user.findUnique({
       where: {
-        domain,
+        email,
+      },
+      select: {
+        email: true,
+        id: true,
+        name: true,
+        tenant: true,
       },
     });
 
-    if (tenant) {
-      const idp = createSSOIdentityProvider(
-        tenant.login_url,
-        tenant.logout_url,
-        tenant.certificates
-      );
-      const sp = createSSOServiceProvider(tenant.id);
-      sp.create_login_request_url(
-        idp,
-        {},
-        function (err, login_url, request_id) {
-          if (err != null) return res.send(500);
-          return res.redirect(login_url);
-        }
-      );
-    } else throw new Error("SSO not registered!");
+    if (!user) throw new Error("User not registered!");
+    const tenant = user.tenant;
+    if (tenant.auth_type !== "SSO")
+      throw new Error("Your tenant not implemented the SSO authentication!");
+
+    // const tenant = await db.tenant.findUnique({
+    //   where: {
+    //     domain,
+    //   },
+    // });
+
+    const idp = createSSOIdentityProvider(
+      tenant.login_url,
+      tenant.logout_url,
+      tenant.certificates
+    );
+    const sp = createSSOServiceProvider(tenant.id);
+    sp.create_login_request_url(
+      idp,
+      {},
+      function (err, login_url, request_id) {
+        if (err != null) throw new Error(err?.message);
+        return res.redirect(login_url);
+      }
+    );
+
+    // if (tenant) {
+      
+    // } else throw new Error("SSO not registered!");
   } catch (error) {
     return res.status(500).json({
       success: false,
