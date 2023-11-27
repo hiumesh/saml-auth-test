@@ -42,7 +42,7 @@ model User {
 model Session {
   id              Int      @id @default(autoincrement())
   user_id         Int
-  refresh_token   String
+  refresh_token   String?
   name_id         String?
   session_index   String?
   User            User   @relation(fields: [user_id], references: [id])

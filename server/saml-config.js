@@ -1,6 +1,8 @@
 const saml2 = require("saml2-js");
 const fs = require("fs");
 
+const BASE_URL = process.env.BASE_URL;
+
 // var sp_options = {
 //   entity_id:
 //     "https://5000-hiumesh-samlauthtest-socx4gtsm7q.ws-us106.gitpod.io/saml/metadata",
@@ -13,10 +15,10 @@ const fs = require("fs");
 
 const createSSOServiceProvider = (tenant_id) => {
   var options = {
-    entity_id: `https://5000-hiumesh-samlauthtest-socx4gtsm7q.ws-us106.gitpod.io/saml/${tenant_id}/metadata`,
+    entity_id: `${BASE_URL}/saml/${tenant_id}/metadata`,
     private_key: fs.readFileSync("sp-private-key.pem").toString(),
     certificate: fs.readFileSync("sp-certificate.pem").toString(),
-    assert_endpoint: `https://5000-hiumesh-samlauthtest-socx4gtsm7q.ws-us106.gitpod.io/saml/${tenant_id}/assert`,
+    assert_endpoint: `${BASE_URL}/saml/${tenant_id}/assert`,
     allow_unencrypted_assertion: true,
   };
 
