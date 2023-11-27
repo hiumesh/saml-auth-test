@@ -1,6 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+
+const JWT_SECRET = "klfjsldkjflskdjflskdjfsldfjlsk";
 
 const db = require("./db");
 const {
@@ -18,6 +22,7 @@ app.use(
   })
 );
 app.use(bodyParser.json());
+app.use(cookieParser());
 
 app.get("/", (req, res) => {
   return res.send("Hi from this side");
@@ -61,7 +66,8 @@ app.get("/saml/login", async function (req, res) {
     const idp = createSSOIdentityProvider(
       tenant.login_url,
       tenant.logout_url,
-      tenant.certificates
+      tenant.certificates,
+      email
     );
     const sp = createSSOServiceProvider(tenant.id);
     sp.create_login_request_url(idp, {}, function (err, login_url, request_id) {
@@ -129,13 +135,32 @@ app.post("/saml/:tenantId/assert", async function (req, res) {
 
       if (!user) throw new Error("User not registered in the Database!");
 
+      const tokenPayload = {
+        id: user.id,
+        email: user.email,
+        tenant_id: user.tenant_id,
+      };
+
+      console.log(JWT_SECRET);
+
+      const accessToken = jwt.sign(tokenPayload, JWT_SECRET, {
+        expiresIn: "15m",
+      });
+      const refreshToken = jwt.sign(tokenPayload, JWT_SECRET, {
+        expiresIn: "7d",
+      });
+
       const session = await db.session.create({
         data: {
           user_id: user.id,
           name_id: saml_response.user.name_id,
           session_index: saml_response.user.session_index,
+          refresh_token: refreshToken,
         },
       });
+
+      res.cookie("access_token", accessToken, { httpOnly: true });
+      res.cookie("refresh_token", refreshToken, { httpOnly: true });
 
       return res.json({
         success: true,
@@ -150,16 +175,37 @@ app.post("/saml/:tenantId/assert", async function (req, res) {
   }
 });
 
-app.get("/saml/logout", function (req, res) {
-  var options = {
-    name_id: req.session.name_id,
-    session_index: req.session.session_index,
-  };
+app.get("/logout", async function (req, res) {
+  try {
+    console.log(
+      req.headers["cf-connecting-ip"] ||
+        req.headers["x-real-ip"] ||
+        req.headers["x-forwarded-for"] ||
+        req.socket.remoteAddress ||
+        null
+    );
+    if (req.cookies?.refresh_token) {
+      await db.session.delete({
+        where: {
+          refresh_token: req.cookies.refresh_token,
+        },
+      });
 
-  sp.create_logout_request_url(idp, options, function (err, logout_url) {
-    if (err != null) return res.send(500);
-    res.redirect(logout_url);
-  });
+      res.clearCookie("access_token");
+      res.clearCookie("refresh_token");
+
+      return res.json({
+        success: true,
+        message: "Logout Successfull!",
+      });
+    }
+    throw new Error("No Session Found!");
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 });
 
 app.listen(5000, () => {

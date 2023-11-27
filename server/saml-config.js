@@ -38,12 +38,14 @@ const createSSOServiceProvider = (tenant_id) => {
 const createSSOIdentityProvider = (
   sso_login_url,
   sso_logout_url,
-  certificates
+  certificates,
+  email
 ) => {
   const options = {
     sso_login_url,
     sso_logout_url,
     certificates,
+    login_hint: email,
   };
   return new saml2.IdentityProvider(options);
 };
